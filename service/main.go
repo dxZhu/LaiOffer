@@ -1,14 +1,16 @@
 package main
 
 import (
-	elastic "gopkg.in/olivere/elastic.v3"
+	"context"
+	"cloud.google.com/go/storage"
 	"encoding/json"
 	"fmt"
+	"github.com/pborman/uuid"
+	elastic "gopkg.in/olivere/elastic.v3"
 	"log"
 	"net/http"
-	"strconv"
 	"reflect"
-	"github.com/pborman/uuid"
+	"strconv"
 )
 
 type Location struct {
@@ -20,18 +22,19 @@ type Post struct {
 	User     string   `json:"user"`
 	Message  string   `json:"message"`
 	Location Location `json:"location"`
+	Url	string	`json:"url"`
 }
 
 const (
-	INDEX = "around"
-	TYPE = "post"
+	INDEX    = "around"
+	TYPE     = "post"
 	DISTANCE = "200km"
 	// Needs to update
 	// PROJECT_ID = "around-dongxin2"
 	// BT_INSTANCE = "around-post"
 	// Needs to update this URL if you deploy it to cloud
-	ES_URL = "http://35.193.229.151:9200"
-
+	ES_URL = "http://35.192.227.102:9200"
+	BUCKET_NAME = "post-images-206502-1"
 )
 
 func main() {
@@ -59,10 +62,10 @@ func main() {
 				}
 			}
 			}`
-			_, err := client.CreateIndex(INDEX).Body(mapping).Do()
-			if err != nil {
-				panic(err)
-			}
+		_, err := client.CreateIndex(INDEX).Body(mapping).Do()
+		if err != nil {
+			panic(err)
+		}
 	}
 	fmt.Println("started-servie")
 	http.HandleFunc("/post", handlerPost)
@@ -80,6 +83,54 @@ func main() {
 // 	}
 //}
 func handlerPost(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type,Authorization")
+
+	r.ParseMultipartForm(32 << 20)
+
+	//Parse from form data
+	fmt.Printf("Received one post request %s\n", r.FormValue("message"))
+	lat, _ := strconv.ParseFloat(r.FormValue("lat"), 64)
+	lon, _ := strconv.ParseFloat(r.FormValue("lon"), 64)
+	p := &Pot{
+		User:    "1111",
+		Message: r.FormValue("message"),
+		Location: Location{
+		      Lat: lat,
+		      Lon: lon,
+		},
+	}
+
+	id := uuid.New()
+
+	file, _, err := r.FormFile("image")
+	if err != nil {
+		http.Error(w, "image is not available", http.StatusInternalServerError)
+		fmt.Printf("Image is not available%v.\n", err)
+		panic(err)
+	}
+	defer file.Close()
+
+	ctx := context.Background()
+
+	//	save to GCS:
+	_, arres, err := saveToGCS(ctx, file, BUCKET_NAME, id)
+	if err != nil {
+		http.Error(w, "GCS is not setup", http.StatusInternalServerError)
+		fmt.Printf("GCS is not setup %v.\n")
+		panic(err)
+	}
+
+	//	Update the media link after sacing to saveToGCS
+	p.Url = attrs.MediaLink
+
+	//	Save to ES
+	saveToES(p, id)
+
+	//	Save to big table
+	// saveToBigTable(p, id)
+	/*
 	fmt.Println("Received one post request.")
 
 	decoder := json.NewDecoder(r.Body)
@@ -115,12 +166,47 @@ func saveToES(p *Post, id string) {
 		BodyJson(p).
 		Refresh(true).
 		Do()
-		if err != nil {
-			panic(err)
-			return
-		}
-		fmt.Printf("Post is saved to Index: %s\n", p.Message)
+	if err != nil {
+		panic(err)
+		return
+	}
+	fmt.Printf("Post is saved to Index: %s\n", p.Message)
+	*/
 }
+
+// Save an image to GCS.
+func saveToGCS(ctx context.Context, r io.Reader, bucketName, name string) (*storage.ObjectHandle, *storage.ObjectAttrs, error) {
+	// Create a client
+	clent, err := stoarge.NewClient(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	bucket := client.Bucket(bucketName)
+
+	if _, err := bucket.Attrs(ctx); err != nil {
+		return nil, nil, err
+	}
+
+	obj := bucket.Object(name)
+	wc := obj.NewWriter(ctx)
+	if _, err = io.Copy(wc, f); err != nil {
+		return nil, nil, err
+	}
+	if err := wc.Close(); err != nil {
+		return nil, nil, err
+	}
+
+	if  err := obj.ACL().Set(ctx, storage.AllUsers, storage.RoleReader); err != nil {
+		return nil, nil, err
+	}
+
+	attrs, err := obj.Attrs(ctx)	//obtain
+	fmt.Printf("Post is saved to GCS %s\n", attrs.MediaLink)
+
+	return obj, attrs, nil
+}
+
 
 func handlerSearch(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Received one request for search.")
@@ -174,7 +260,7 @@ func handlerSearch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// searchResult is of type SearchResult and returns hits, suggestions,
-  // and all kinds of other information from Elasticsearch.
+	// and all kinds of other information from Elasticsearch.
 	fmt.Printf("Query took %d milliseconds\n", searchResult.TookInMillis)
 	// TotalHits is another convenience function that works even when something goes wrong
 	fmt.Printf("Found a total of %d post\n", searchResult.TotalHits())
@@ -185,7 +271,7 @@ func handlerSearch(w http.ResponseWriter, r *http.Request) {
 	var typ Post
 	var ps []Post
 	for _, item := range searchResult.Each(reflect.TypeOf(typ)) {
-		p := item.(Post)	//p = (Post) item
+		p := item.(Post) //p = (Post) item
 		fmt.Printf("Post by %s: %s at alt %v and lon %v\n", p.User, p.Message,
 			p.Location.Lat, p.Location.Lon)
 		// TODO: Perform filtering based on keywords such as web spam

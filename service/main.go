@@ -1,6 +1,9 @@
 package main
 
 import (
+	"github.com/auth0/go-jwt-middleware"
+  "github.com/dgrijalva/jwt-go"
+  "github.com/gorilla/mux"
 	"context"
 	"cloud.google.com/go/storage"
 	"encoding/json"
@@ -38,6 +41,8 @@ const (
 	BUCKET_NAME = "post-images-206502-1"
 )
 
+var mySigningKey = []byte("secret")
+
 func main() {
 	// Create a Client
 	client, err := elastic.NewClient(elastic.SetURL(ES_URL), elastic.SetSniff(false))
@@ -68,9 +73,26 @@ func main() {
 			panic(err)
 		}
 	}
-	fmt.Println("started-servie")
-	http.HandleFunc("/post", handlerPost)
-	http.HandleFunc("/search", handlerSearch)
+	fmt.Println("started-servie successfully")
+	// Here we are instantiating the gorilla/mux router
+	r := mux.NewRouter()
+
+	var jwtMiddleware = jwtmiddleware.New(jwtmiddleware.Options{
+		ValidationKeyGetter: func(token *jwt.Token) (interface{}, err) {
+			return mySigningKey, nil
+		},
+		SigningMethod: jwt.SigningMethodHS256,
+	})
+
+	r.Handle("/post", jwtMiddleware.Handler(http.HandlerFunc(handlerPost))).Method("POST")
+	r.Handle("/search", jwtMiddleware.Handler(http.HandlerFunc(handlerSearch))).Method("GET")
+	r.Handle("/login", http.HandlerFunc(loginHandler)).Method("POST")
+	r.Handle("/signup", http.HandlerFunc(signupHandler)).Method("POST")
+
+	http.Handler("/", r)
+
+	// http.HandleFunc("/post", handlerPost)
+	// http.HandleFunc("/search", handlerSearch)
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
@@ -88,6 +110,10 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type,Authorization")
 
+	user := r.Context().Value("user")
+	claims := user.(*jwt.Token).Claims
+	username := claims.(jwt.MapClaims)["username"]
+
 	r.ParseMultipartForm(32 << 20)
 
 	//Parse from form data
@@ -95,7 +121,7 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
 	lat, _ := strconv.ParseFloat(r.FormValue("lat"), 64)
 	lon, _ := strconv.ParseFloat(r.FormValue("lon"), 64)
 	p := &Post{
-		User:    "1111",
+		User:    username.(string),
 		Message: r.FormValue("message"),
 		Location: Location{
 		      Lat: lat,
@@ -129,7 +155,7 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
 	//	Save to ES
 	saveToES(p, id)
 
-	//	Save to big table
+	//	Save to big table unformed data
 	// saveToBigTable(p, id)
 	/*
 	fmt.Println("Received one post request.")

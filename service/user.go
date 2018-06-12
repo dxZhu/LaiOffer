@@ -69,9 +69,9 @@ func addUser(user User) bool {
   }
 
   termQuery := elastic.NewTermQuery("username", user.Username)
-  queryResult, err = es_client.Search().
+  queryResult, err := es_client.Search().
     Index(INDEX).
-    Querry(termQuery).
+    Query(termQuery).
     Pretty(true).
     Do()
   if err != nil {
@@ -87,7 +87,7 @@ func addUser(user User) bool {
   _, err = es_client.Index().
     Index(INDEX).
     Type(TYPE_USER).
-    Id(user.User_name).
+    Id(user.Username).
     BodyJson(user).
     Refresh(true).
     Do()

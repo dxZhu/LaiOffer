@@ -37,7 +37,7 @@ const (
 	// PROJECT_ID = "around-dongxin2"
 	// BT_INSTANCE = "around-post"
 	// Needs to update this URL if you deploy it to cloud
-	ES_URL = "http://35.194.42.42:9200"
+	ES_URL = "http://35.225.179.194:9200"
 	BUCKET_NAME = "post-images-206502-1"
 )
 
@@ -78,18 +78,18 @@ func main() {
 	r := mux.NewRouter()
 
 	var jwtMiddleware = jwtmiddleware.New(jwtmiddleware.Options{
-		ValidationKeyGetter: func(token *jwt.Token) (interface{}, err) {
+		ValidationKeyGetter: func(token *jwt.Token) (interface{}, error) {
 			return mySigningKey, nil
 		},
 		SigningMethod: jwt.SigningMethodHS256,
 	})
 
-	r.Handle("/post", jwtMiddleware.Handler(http.HandlerFunc(handlerPost))).Method("POST")
-	r.Handle("/search", jwtMiddleware.Handler(http.HandlerFunc(handlerSearch))).Method("GET")
-	r.Handle("/login", http.HandlerFunc(loginHandler)).Method("POST")
-	r.Handle("/signup", http.HandlerFunc(signupHandler)).Method("POST")
+	r.Handle("/post", jwtMiddleware.Handler(http.HandlerFunc(handlerPost))).Methods("POST")
+	r.Handle("/search", jwtMiddleware.Handler(http.HandlerFunc(handlerSearch))).Methods("GET")
+	r.Handle("/login", http.HandlerFunc(loginHandler)).Methods("POST")
+	r.Handle("/signup", http.HandlerFunc(signupHandler)).Methods("POST")
 
-	http.Handler("/", r)
+	http.Handle("/", r)
 
 	// http.HandleFunc("/post", handlerPost)
 	// http.HandleFunc("/search", handlerSearch)

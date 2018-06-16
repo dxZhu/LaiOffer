@@ -5,6 +5,7 @@ import (
   "github.com/dgrijalva/jwt-go"
   "github.com/gorilla/mux"
 	"context"
+	"cloud.google.com/go/bigtable"
 	"cloud.google.com/go/storage"
 	"encoding/json"
 	"fmt"
@@ -188,7 +189,7 @@ func saveToBigTable(p *Post, id string) {
 
 	tbl := bt_client.Open("post")
 	mut := bigtable.NewMutation()
-	t := bigtable.Now()
+	t := bigtable.Now()	// this is a time stamp
 
 	mut.Set("post", "user", t, []byte(p.User))
 	mut.Set("post", "message", t, []byte(p.Message))

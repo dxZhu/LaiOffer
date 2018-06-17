@@ -35,8 +35,8 @@ const (
 	TYPE     = "post"
 	DISTANCE = "200km"
 	// Needs to update
-	PROJECT_ID  = "plated-cabinet-206502"
-	BT_INSTANCE = "around-post"
+	// PROJECT_ID  = "plated-cabinet-206502"
+	// BT_INSTANCE = "around-post"
 	// Needs to update this URL if you deploy it to cloud
 	ES_URL      = "http://35.202.248.154:9200"
 	BUCKET_NAME = "post-images-206502-1"
@@ -157,9 +157,10 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
 	saveToES(p, id)
 
 	//	Save to big table unformed data
-	saveToBigTable(p, id)
+	// saveToBigTable(p, id)
 }
 
+/*
 func saveToBigTable(p *Post, id string) {
 	ctx := context.Background()
 	// you must update project name here
@@ -185,6 +186,7 @@ func saveToBigTable(p *Post, id string) {
 	}
 	fmt.Printf("Post is saved to BigTable: %s\n", p.Message)
 }
+*/
 
 func saveToES(p *Post, id string) {
 	// Create a client

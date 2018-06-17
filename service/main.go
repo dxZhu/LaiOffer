@@ -1,21 +1,21 @@
 package main
 
 import (
-	"github.com/auth0/go-jwt-middleware"
-  "github.com/dgrijalva/jwt-go"
-  "github.com/gorilla/mux"
-	"context"
 	"cloud.google.com/go/bigtable"
 	"cloud.google.com/go/storage"
+	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/auth0/go-jwt-middleware"
+	"github.com/dgrijalva/jwt-go"
+	"github.com/gorilla/mux"
 	"github.com/pborman/uuid"
 	elastic "gopkg.in/olivere/elastic.v3"
+	"io"
 	"log"
 	"net/http"
 	"reflect"
 	"strconv"
-	"io"
 )
 
 type Location struct {
@@ -27,7 +27,7 @@ type Post struct {
 	User     string   `json:"user"`
 	Message  string   `json:"message"`
 	Location Location `json:"location"`
-	Url	string	`json:"url"`
+	Url      string   `json:"url"`
 }
 
 const (
@@ -35,10 +35,10 @@ const (
 	TYPE     = "post"
 	DISTANCE = "200km"
 	// Needs to update
-	PROJECT_ID = "plated-cabinet-206502"
+	PROJECT_ID  = "plated-cabinet-206502"
 	BT_INSTANCE = "around-post"
 	// Needs to update this URL if you deploy it to cloud
-	ES_URL = "http://35.225.179.194:9200"
+	ES_URL      = "http://146.148.87.64:9200"
 	BUCKET_NAME = "post-images-206502-1"
 )
 
@@ -125,8 +125,8 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
 		User:    username.(string),
 		Message: r.FormValue("message"),
 		Location: Location{
-		      Lat: lat,
-		      Lon: lon,
+			Lat: lat,
+			Lon: lon,
 		},
 	}
 
@@ -158,24 +158,6 @@ func handlerPost(w http.ResponseWriter, r *http.Request) {
 
 	//	Save to big table unformed data
 	saveToBigTable(p, id)
-	/*
-	fmt.Println("Received one post request.")
-
-	decoder := json.NewDecoder(r.Body)
-	var p Post
-	if err := decoder.Decode(&p); err != nil {
-		// ; represent two instr lines;
-		// in this if statement, it has two lines, one for initialization,
-		// one for comparison
-		// scope, this err is only for this if statement
-		panic(err)
-		return
-	}
-	id := uuid.New()
-	// Save to ES
-	saveToES(&p, id)
-	// w is the value our server send to browser
-	fmt.Fprintf(w, "Post received: %s\n", p.Message)	*/
 }
 
 func saveToBigTable(p *Post, id string) {
@@ -183,13 +165,13 @@ func saveToBigTable(p *Post, id string) {
 	// you must update project name here
 	bt_client, err := bigtable.NewClient(ctx, PROJECT_ID, BT_INSTANCE)
 	if err != nil {
-				panic(err)
-				return
+		panic(err)
+		return
 	}
 
 	tbl := bt_client.Open("post")
 	mut := bigtable.NewMutation()
-	t := bigtable.Now()	// this is a time stamp
+	t := bigtable.Now()
 
 	mut.Set("post", "user", t, []byte(p.User))
 	mut.Set("post", "message", t, []byte(p.Message))
@@ -198,8 +180,8 @@ func saveToBigTable(p *Post, id string) {
 
 	err = tbl.Apply(ctx, id, mut)
 	if err != nil {
-				panic(err)
-				return
+		panic(err)
+		return
 	}
 	fmt.Printf("Post is saved to BigTable: %s\n", p.Message)
 }
@@ -252,16 +234,15 @@ func saveToGCS(ctx context.Context, r io.Reader, bucketName, name string) (*stor
 		return nil, nil, err
 	}
 
-	if  err := obj.ACL().Set(ctx, storage.AllUsers, storage.RoleReader); err != nil {
+	if err := obj.ACL().Set(ctx, storage.AllUsers, storage.RoleReader); err != nil {
 		return nil, nil, err
 	}
 
-	attrs, err := obj.Attrs(ctx)	//obtain
+	attrs, err := obj.Attrs(ctx) //obtain
 	fmt.Printf("Post is saved to GCS %s\n", attrs.MediaLink)
 
 	return obj, attrs, nil
 }
-
 
 func handlerSearch(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Received one request for search.")
